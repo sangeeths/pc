@@ -1,5 +1,6 @@
 
-#include <sys/shm.h>
+#include <pthread.h>
+
 
 #define PRODUCER_MIN    1
 #define PRODUCER_MAX    10
@@ -20,19 +21,8 @@ if (g_debug) {                          \
             __LINE__, msg);             \
 }
 
-/* shared memory variables */
-/*
-#define SHM_KEY 1409198229
+pthread_t *p_id;
+pthread_t *c_id;
+int *t_id;
 
-int shm_id;
-char *data;
-*/
-
-/*
-int segment_id; 
-char* shared_memory; 
-struct shmid_ds shmbuffer; 
-int segment_size; 
-const int shared_segment_size = 0x6400; 
-*/
 

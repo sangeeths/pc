@@ -2,19 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/shm.h>
+#include <sys/stat.h>
+
 #include "q.h"
-
-/*
-void disp_q(queue *q)
-{
-    int i;
-    for (i=0; i<q->size; i++)
-        printf("[%d]%d - ", i, q->data[i]);
-    printf("\n");
-    return;
-}
-*/
-
 
 
 /*
@@ -41,6 +32,29 @@ int empty_q(queue *q)
 
 
 /*
+Check whether a queue is full or not
+
+RETURN:
+    if full, returns QFULL
+    else returns QNOTFULL
+
+ERROR:
+    QNOTAVAILABLE   If the incoming queue
+                    is not allocated  
+*/
+int full_q(queue *q)
+{
+    if (!q) {
+        PRINT_INFO("queue not available");
+        return QNOTAVAILABLE;
+    }
+    if ((q->rear + 1) % q->size == q->front)
+        return QFULL;
+    return QNOTFULL;
+}
+
+
+/*
 Display the content of the queue in the 
 following order:
 
@@ -63,8 +77,10 @@ int display_q(queue *q)
     }
 
     /* empty queue */
-    if (q->rear == QNULL && q->front == QNULL) 
+    if (q->rear == QNULL && q->front == QNULL) {
+        printf("\n");
         return QEMPTY;
+    }
 
     /* one element queue */
     if (q->rear == q->front) {
@@ -112,33 +128,25 @@ int create_q(queue **q, int size)
 {
     queue *nq = NULL;
     int *p = NULL;
+    int shm_q, shm_qdata; 
 
     if (*q) {
         PRINT_INFO("queue address not null");
         return Q_OP_FAILURE;
     }
 
-    /* Create a queue */
-    if ((nq = (queue *) malloc(sizeof(queue))) == NULL) {
-        PRINT_INFO("unable to create a queue\n"); 
-        return MEMERR;
-    }
+    /* create a shared memory for the queue */
+    shm_q = shmget (IPC_PRIVATE, sizeof(queue), 
+                     IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR); 
+    nq = (queue *) shmat (shm_q, 0, 0); 
 
-    /* Create elements of the queue */
-    /*
-    if ((p = (int *) malloc(sizeof(int) * size)) == NULL) {
-        PRINT_INFO("unable to allocate memory for queue\n"); 
-        free(nq);
-        return MEMERR;
-    }
+    /* create a shared memory for the queue data */
+    shm_qdata = shmget (IPC_PRIVATE, sizeof(int) * size, 
+                        IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR); 
+    nq->data = (int *) shmat (shm_qdata, 0, 0); 
 
-    memset(p, 0, sizeof(int) * size);    
-    */
-
-    //nq->data = p;
     nq->front = nq->rear = QNULL;
-    //nq->size = size;
-    nq->size = QUEUE_SIZE;
+    nq->size = size;
 
     PRINT_INFO("queue created successfully");
 
@@ -170,9 +178,9 @@ int delete_q(queue **q)
     oq = *q;
     *q = NULL;
 
-    //free(oq->data);
-    free(oq);
-    oq = NULL;
+    /* detach the shared memory */
+    shmdt(oq->data);
+    shmdt(oq);
     
     PRINT_INFO("queue deleted successfully");
 
@@ -203,6 +211,10 @@ int enqueue(queue *q, int data)
         return QNOTAVAILABLE;
     }
 
+    /* full queue */
+    if (full_q(q) == QFULL)
+        return QFULL;
+
     /* empty queue - adding first element */
     if (q->rear == QNULL && q->front == QNULL) {
         q->rear++;
@@ -213,13 +225,6 @@ int enqueue(queue *q, int data)
         return Q_OP_SUCCESS;
     }
 
-    /* if queue full, then return */
-    if((q->rear + 1)% q->size == q->front) {
-        sprintf(msg, "queue full - can't add %d", data);
-        PRINT_INFO(msg);
-        return QFULL;
-    }
-
     /* add to the rear of the queue */
     q->rear += 1;
     q->rear %= q->size;
@@ -228,7 +233,7 @@ int enqueue(queue *q, int data)
     sprintf(msg, "%d enqueued successfully", data);
     PRINT_INFO(msg);
     
-    display_q(q);
+    //display_q(q);
 
     return Q_OP_SUCCESS;
 }
@@ -258,11 +263,9 @@ int dequeue(queue *q, int *data)
     }
 
     /* empty queue */
-    if (q->front == QNULL && q->rear == QNULL) {
-        PRINT_INFO("queue empty - can't dequeue");
+    if (empty_q(q) == QEMPTY)
         return QEMPTY;
-    }
-     
+
     /* only one element queue.. so extract the value 
        and initialize front and rear to QNULL
     */
@@ -282,7 +285,7 @@ int dequeue(queue *q, int *data)
     sprintf(msg, "%d dequeued successfully", *data);
     PRINT_INFO(msg);
 
-    display_q(q);
+    //display_q(q);
 
     return Q_OP_SUCCESS;
 }
