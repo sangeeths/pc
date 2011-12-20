@@ -1,6 +1,8 @@
 A producer-consumer problem
 
-gcc pc.c pc.h pc-cmd.h pc-cmd.c q.c q.h -lpthread
+make clean
+make
+
 ./a.out -p 10 -c 10 -q 10
 
 
